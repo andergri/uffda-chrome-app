@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Uffda</title>
+  <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.1.1/css/bootstrap-theme.css">
+</head>
+<body>
+
+
+  <div class="container">
+    <h1>User Manager</h1>
+    <hr />
+    <div class="page"></div>
+  </div>
+
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.0/jquery.min.js" type="text/javascript"></script>
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js" type="text/javascript"></script>
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.1.2/backbone-min.js"></script>
+  <script type="text/javascript" src="http://www.parsecdn.com/js/parse-1.2.18.min.js"></script>
+
+    <script type="text/template" id="share-template">
+        <div id="user-info">
+            Signed in as <%= Parse.User.current().get("username") %> (<a href="#" class="log-out">Log out</a>)
+        </div>
+
+        <div class="section">
+
+            <header id="header"></header>
+
+            <div id="main">
+                    <ul id="user-list"></ul>
+                    <button class="share">Share</button>
+            </div>
+            
+        </div>
+    </script>
+
+    <script type="text/template" id="user-template">
+        <li class="">
+	       <div class="view">
+                <input class="toggleProfileImage" type="image" src="<%= thumbnail %>" alt="Submit" style="width:50px; height:50px;">
+	            <label class="todo-content"><%= username %></label>
+                <label class="todo-content"><%= objectId %></label>
+	       </div>
+        </li>
+    </script>
+    
+    <script type="text/template" id="login-template">
+      <header id="header"></header>
+      <div class="login">
+        <form class="login-form">
+          <h2>Log In</h2>
+          <div class="error" style="display:none"></div>
+          <input type="text" id="login-username" placeholder="Username" />
+          <input type="password" id="login-password" placeholder="Password" />
+          <button>Log In</button>
+        </form>
+      </div>
+    </script>
+    
+  <script>
+    
+    Parse.initialize("2WQkKlufhKEO5l3HxrK1BzzfItkIEgaxlCHskSr7", "vB2uYEo5TpflFWJtdJ4Hrnj0BXfhvSuze3E3CzPC");
+    
+    /** Helper Functions **/
+      
+    function htmlEncode(value){
+      return $('<div/>').text(value).html();
+    }
+    $.fn.serializeObject = function() {
+      var o = {};
+      var a = this.serializeArray();
+      $.each(a, function() {
+          if (o[this.name] !== undefined) {
+              if (!o[this.name].push) {
+                  o[this.name] = [o[this.name]];
+              }
+              o[this.name].push(this.value || '');
+          } else {
+              o[this.name] = this.value || '';
+          }
+      });
+      return o;
+    };
+
+      
+    /** Models and Collections **/  
+      
+    var User = Parse.Object.extend("User", {
+        defaults: {
+            selected: false
+        },
+
+        initialize: function() {
+            if (!this.selected) {
+                this.selected = this.defaults.selected;
+            }
+        },
+        
+        toggle: function() {
+            this.selected = !this.selected;
+        }
+    });
+
+    var Relationship = Parse.Object.extend("Relationship", { 
+    });  
+    
+    var Share = Parse.Object.extend({
+      className: "Share"
+    });
+    
+    var Media = Parse.Object.extend({
+      className: "Media"
+    });
+
+    var Relationships = Parse.Collection.extend({
+      model: Relationship
+    });
+    var Users = Parse.Collection.extend({
+      model: User
+    });
+
+      
+    /** Views **/  
+    
+    // UserView
+    var UserView = Parse.View.extend({
+
+        tagName:  "li",
+
+        // Cache the template function for a single item.
+        template: _.template($('#user-template').html()),
+
+        // The DOM events specific to an item.
+        events: {
+            "click .toggleProfileImage" : "toggleShare",
+        },
+
+        // The TodoView listens for changes to its model, re-rendering. Since there's
+        // a one-to-one correspondence between a Todo and a TodoView in this
+        // app, we set a direct reference on the model for convenience.
+        initialize: function() {
+            var self = this;
+            _.bindAll(this, 'render', 'toggleShare');
+        },
+
+        // Re-render the contents of the todo item.
+        render: function() {
+            $(this.el).html(this.template(this.model.toJSON()));
+            return this;
+        },
+
+        // Toggle the `"done"` state of the model.
+        toggleShare: function() {
+            console.log("user toggle " + this.model.selected);
+            this.model.toggle();
+        },
+    });
+      
+    // ShareView
+    var ShareView = Parse.View.extend({
+
+        events: {
+            "click .share": "share",
+            "click .log-out": "logOut"
+        },
+
+        el: ".page",
+
+        initialize: function() {
+            var self = this;
+
+            console.log("initalize");
+            
+            _.bindAll(this, 'addOne', 'render', 'share', 'logOut');
+            
+            // Main todo management template
+            this.$el.html(_.template($("#share-template").html()));
+
+            // Users
+            this.users = new Users();
+            
+            // Create our collection of Relationships
+            this.relationships = new Relationships();
+            
+            var queryIni = new Parse.Query(Relationship);
+            queryIni.equalTo("relationshipInitiator", Parse.User.current());
+            queryIni.equalTo("relationshipStatusType", "friends");
+ 
+            var queryRec = new Parse.Query(Relationship);
+            queryRec.equalTo("relationshipReceiver", Parse.User.current());
+            queryRec.equalTo("relationshipStatusType", "friends");
+ 
+            this.relationships.query = Parse.Query.or(queryIni, queryRec);
+            this.relationships.query.include("relationshipInitiator");
+            this.relationships.query.include("relationshipReceiver");
+            
+            this.relationships.fetch({
+                success: function(relationships) {
+                    relationships.each(self.addOne); 
+                },
+                error: function(collection, error) {
+                    console.log("error");
+                }
+            });
+        },
+
+        render: function() {
+            console.log("render");
+            this.delegateEvents();
+        },
+
+        addOne: function(relationship) {
+            if(relationship.get("relationshipInitiator").id != Parse.User.current().id){
+                var view = new UserView({model: relationship.get("relationshipInitiator")});
+            }else{
+                var view = new UserView({model: relationship.get("relationshipReceiver")});
+            }
+            this.$("#user-list").append(view.render().el);
+        },
+        
+        logOut: function(e) {
+            Parse.User.logOut();
+            new LogInView();
+            this.undelegateEvents();
+            delete this;
+        },
+
+        share: function(e) {
+            var self = this;
+            
+            var media = new Media();
+            media.set("mediaType", null);
+            media.set("mediaTitle", null);
+            media.set("mediaSubtitle", null);
+            media.set("mediaPublished", null);
+            media.set("mediaDomain", null);
+            media.set("mediaLink", null);
+            media.set("mediaImage", null);
+            media.set("mediaVisualContnet", null);
+            media.set("mediaPlayableContent", null);
+            media.set("mediaReadableContent", null);
+            
+            this.relationships.each(function( rel ) {
+                
+                var selectedUser = null;
+                if(rel.get("relationshipInitiator").id != Parse.User.current().id){
+                    selectedUser = rel.get("relationshipInitiator");
+                }else{
+                    selectedUser = rel.get("relationshipReceiver");
+                }
+                
+                // Share the media with this user
+                if(selectedUser && selectedUser.selected){
+                    
+                    console.log("sharing to " + selectedUser.id);
+                    
+                    var share = new Share();
+                    share.set("shareTo", selectedUser);
+                    share.set("shareFrom", Parse.User.current());
+                    share.set("shareMedia", media);
+                    share.set("shareComment", null);
+                    share.set("shareVisited", null);
+ 
+                    share.save(null, {
+                        success: function(share) {
+                            console.log("successus, shared with " + share.id);
+                        },
+                        error: function(share, error) {
+                            console.log("error saving");
+                        }
+                    });
+                }  
+            });
+            console.log("close session");
+        }
+    });
+    
+    // LoginView  
+    var LoginView = Parse.View.extend({
+    
+        el: '.page',
+        
+        events: {
+            "submit form.login-form": "logIn",
+        },
+        
+        initialize: function() {
+            _.bindAll(this, "logIn");
+            this.render();
+        },
+
+        logIn: function(e) {
+            var self = this;
+            var username = this.$("#login-username").val();
+            var password = this.$("#login-password").val();
+      
+            Parse.User.logIn(username, password, {
+                success: function(user) {
+                    new ShareView();
+                    self.undelegateEvents();
+                    delete self;
+                },
+                error: function(user, error) {
+                    self.$(".login-form .error").html("Invalid username or password. Please try again.").show();
+                    this.$(".login-form button").removeAttr("disabled");
+                }
+            });
+
+            this.$(".login-form button").attr("disabled", "disabled");
+
+            return false;
+        },
+        
+        render: function() {
+            this.$el.html(_.template($("#login-template").html()));
+            this.delegateEvents();
+        } 
+    });  
+      
+    // MainView
+    var MainView = Parse.View.extend({
+    
+        el: ".container",
+
+        initialize: function() {
+            this.render();
+        },
+
+        render: function() {
+            if (Parse.User.current()) {
+                new ShareView();
+            } else {
+                new LoginView();
+            }
+        }
+    });  
+      
+    /**  
+    // Share  
+    var ShareView = Backbone.View.extend({
+      el: '.page',
+      events: {
+        'submit .share-form': 'saveShare',
+        'click .delete': 'deleteUser'
+      },
+      saveShare: function (ev) {
+        var userDetails = $(ev.currentTarget).serializeObject();
+        var user = new User();
+        user.save(userDetails, {
+          success: function (user) {
+            router.navigate('', {trigger:true});
+          }
+        });
+        return false;
+      },
+      deleteUser: function (ev) {
+        this.user.destroy({
+          success: function () {
+            //console.log('destroyed');
+            router.navigate('', {trigger:true});
+          }
+        })
+      },
+      render: function () {
+        var that = this;
+          
+        var users = new Users();
+        var query = new Parse.Query(Relationship);
+          
+        query.find().then(function(relationships){
+            var cb = _.after(relationships.length, function(){
+                console.log(users);
+                var template = _.template($('#relationship-template').html(), {users: users.model});
+                that.$el.html(template);
+            });
+            _.each(relationships, function(relationship){
+                //grab relations
+                var initator = relationship.get("relationshipInitiator");
+                var receiver = relationship.get("relationshipReceiver");
+                
+                initator.fetch({
+                    success: function(initator) {
+                        if(users.contains(initator)){
+                            users.add(initator);
+                            //data.push({username: initator.get('username'), thumbnail: initator.get('thumbnail'), objectId: initator.id });
+                        }
+                        receiver.fetch({
+                            success: function(receiver) {
+                                if(receiver.id != ""){
+                              //      data.push({username: receiver.get('username'), thumbnail: receiver.get('thumbnail'), objectId: receiver.id });
+                                }
+                            }
+                        });
+                    }
+                });
+                cb();
+            });
+        });  
+      }
+        
+    });
+**/
+      
+      
+    /** Routers **/
+      
+    var AppRouter = Parse.Router.extend({
+        routes: {
+            "": "home"
+        },
+
+        initialize: function(options) {
+        },
+
+        home: function() {
+        },
+    });
+
+    new AppRouter;
+    new MainView;
+    Parse.history.start();  
+  
+  </script>
+
+</body>
+</html> 

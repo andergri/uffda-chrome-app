@@ -1,0 +1,22 @@
+/*//////////////////////////////////////////////////////////////////////////////////////////////*/
+/* Uffda  //////////////////////////////////////////////////////////////////////////////////////*/
+/*//////////////////////////////////////////////////////////////////////////////////////////////*/
+
+/** width: 100%; height: 100%; position: fixed !important; z-index: 2147483648; top: 0px; left: 0px; max-width: 100% !important; max-height: 100% !important; padding: 0px !important; background-color: rgba(0, 0, 0, 0.2); display: none !important;  **/
+#uffda-box{width: 100%; height: 100%; position: fixed; z-index: 2147483648; top: 0px; left: 0px; max-width: 100%; max-height: 100%; padding: 0px; background-color: rgba(0, 0, 0, 0.2); display: none; border:none;  }
+
+#uffda-container{margin-top: 30px; z-index:2147483647; background-color: #FFFFFF; -webkit-box-shadow: 0 0 35px rgba(0,0,0,.5); box-shadow: 0 0 35px rgba(0,0,0,.5); border-radius: 5px; max-width: 400px; min-width: 400px; left: 50%; margin-left: -200px; position: fixed;}
+
+#uffda-container iframe{border:none !important; float: left; }
+
+#uffda-iframe-login{ display:none; height:300px; margin:0px; width:100%;}
+
+#uffda-iframe-errorn{ display:none; height:144px; margin:0px; width:100%;}
+
+#uffda-iframe-header{ display:none; height:90px; margin:0px; width:100%;}
+
+#uffda-iframe-main{ display:none; height:85px; margin:0px; width:100%;}
+
+#uffda-iframe-musketeers{ display:none; height:230px; margin:0px; width:100%;}
+
+#uffda-iframe-footer{ display:none; height:50px; margin:0px; width:100%;}
